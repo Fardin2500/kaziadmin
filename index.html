@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>নিকাহনামা সার্চ</title>
+  <style>
+    body { font-family: 'Noto Sans', sans-serif; background-color: #f3fef5; margin: 0; padding: 0; color: #333; }
+    .header { background: linear-gradient(to right, #1a5d49, #0e2b2b); color: white; padding: 60px 20px 40px; text-align: center; }
+    .header h1 { font-size: 36px; margin: 0; }
+    .arabic-calligraphy { font-size: 36px; color: #f4c542; margin-top: 10px; }
+    .subtitle { font-size: 24px; margin-top: 10px; }
+    .search-bar { width: 80%; max-width: 600px; padding: 12px 15px; font-size: 18px; border-radius: 8px; border: 2px solid #ddd; margin: 30px auto; display: block; }
+    .result-container { margin: 30px auto; width: 90%; max-width: 800px; }
+    .result { background: #fff; padding: 20px; margin-bottom: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-left: 5px solid #004d2b; }
+    .result h3 { font-size: 22px; color: #1a5d49; }
+    .result p { margin: 5px 0; }
+    .view-btn { background-color: #1a5d49; color: white; padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer; margin-top: 10px; }
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 999; justify-content: center; align-items: center; }
+    .modal-content { background: white; padding: 20px; border-radius: 10px; width: 90%; max-width: 700px; overflow-y: auto; max-height: 90vh; }
+    .close-btn { background: red; color: white; padding: 5px 10px; float: right; border: none; border-radius: 5px; cursor: pointer; }
+    .print-button { text-align: center; margin-top: 20px; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>নিকাহনামা সার্চ</h1>
+  <div class="arabic-calligraphy">
+    <div style="text-align: center; margin: 30px 0;">
+      <img src="f05ebba6-79e2-400e-b4e9-bb1b0b372cd2.png" alt="Kalima Calligraphy"
+           style="max-width: 25%; border-radius: 30px; box-shadow:  4px 12px rgba(15, 4, 4, 0.2);">
+    </div>
+  </div>
+  <div class="subtitle">নির্বাচন করুন আপনার তথ্য</div>
+</div>
+
+<input type="text" id="search-input" class="search-bar" placeholder="নাম/তারিখ/NID/রেজি নম্বর অনুসন্ধান করুন...">
+<div id="results" class="result-container"></div>
+
+<div id="modal" class="modal">
+  <div class="modal-content">
+    <button class="close-btn" onclick="document.getElementById('modal').style.display='none'">বন্ধ করুন</button>
+    <div id="modal-body"></div>
+    <div class="print-button">
+      <button onclick="printCertificate(currentRecord)">🖨️ নিকাহ সনদ প্রিন্ট করুন</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.12.0/firebase-database-compat.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyA5dXXr1oBfYSJ50Pkh-Jpj4MG2g5i749w",
+    authDomain: "kabinnamainformation.firebaseapp.com",
+    databaseURL: "https://kabinnamainformation-default-rtdb.firebaseio.com",
+    projectId: "kabinnamainformation",
+    storageBucket: "kabinnamainformation.firebasestorage.app",
+    messagingSenderId: "255984571062",
+    appId: "1:255984571062:web:d9d0eddc4b0f2f38b98c17"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database().ref('kabinnama_records');
+
+  const searchInput = document.getElementById('search-input');
+  const resultsContainer = document.getElementById('results');
+  const modal = document.getElementById('modal');
+  const modalBody = document.getElementById('modal-body');
+
+  let allData = {};
+  let currentRecord = null;
+
+  db.on('value', snapshot => {
+    allData = snapshot.val() || {};
+    renderResults(searchInput.value);
+  });
+
+  searchInput.addEventListener('input', e => renderResults(e.target.value));
+
+  function renderResults(query) {
+    const q = query.trim().toLowerCase();
+    resultsContainer.innerHTML = '';
+    let found = false;
+
+    Object.entries(allData).forEach(([key, record]) => {
+      const text = [record.husbandName, record.wifeName, record.marriageDate, record.regNumber, record.regDate, record.husbandNID, record.wifeNID].filter(Boolean).join(' ').toLowerCase();
+
+      if (!q || text.includes(q)) {
+        found = true;
+        const div = document.createElement('div');
+        div.className = 'result';
+        div.innerHTML = `
+          <h3>নিকাহনামা তথ্য</h3>
+          <p><strong>স্বামী:</strong> ${record.husbandName || 'উল্লেখ নেই'}</p>
+          <p><strong>স্ত্রী:</strong> ${record.wifeName || 'উল্লেখ নেই'}</p>
+          <p><strong>বিবাহের তারিখ:</strong> ${record.marriageDate || 'উল্লেখ নেই'}</p>
+          <p><strong>রেজি নম্বর:</strong> ${record.regNumber || 'উল্লেখ নেই'}</p>
+          <button class="view-btn" onclick='showDetails(${JSON.stringify(record)})'>দেখুন</button>
+        `;
+        resultsContainer.appendChild(div);
+      }
+    });
+
+    if (!found) {
+      resultsContainer.innerHTML = '<p style="text-align:center; color:#666;">কোনো ফলাফল পাওয়া যায়নি।</p>';
+    }
+  }
+
+  function showDetails(record) {
+  currentRecord = record;
+  modal.style.display = 'flex';
+
+  const section = (title) => `<h3 style="margin-top:20px; color:#13433f; border-bottom:1px solid #ccc;">${title}</h3>`;
+  const detailRow = (label, value) => `<p><strong>${label}:</strong> ${value || 'উল্লেখ নেই'}</p>`;
+
+  modalBody.innerHTML = `
+    <h2 style="text-align:center; color:#13433f;">বিস্তারিত নিকাহনামা তথ্য</h2>
+    
+    ${section("বরের তথ্য")}
+    ${detailRow("স্বামী", record.husbandName)}
+    ${detailRow("পিতা", record.husbandFather)}
+    ${detailRow("ঠিকানা", record.husbandPermanent)}
+    ${detailRow("NID", record.husbandNID)}
+
+    ${section("কনের তথ্য")}
+    ${detailRow("স্ত্রী", record.wifeName)}
+    ${detailRow("পিতা", record.wifeFather)}
+    ${detailRow("ঠিকানা", record.wifePermanent)}
+    ${detailRow("NID", record.wifeNID)}
+
+    ${section("ওয়ালি ও মোহরানা")}
+    ${detailRow("ওয়ালির নাম", record.waliName)}
+    ${detailRow("সম্পর্ক", record.waliRelation)}
+    ${detailRow("মোট মোহরানা", record.mohoranaTotal + ' টাকা')}
+    ${detailRow("প্রদত্ত", record.mohoranaPaid + ' টাকা')}
+    ${detailRow("বাকি", record.mohoranaDue + ' টাকা')}
+
+    ${section("সাক্ষী")}
+    ${detailRow("সাক্ষী ১", record.witness1Name + " (" + record.witness1Address + ")")}
+    ${detailRow("সাক্ষী ২", record.witness2Name + " (" + record.witness2Address + ")")}
+
+    ${section("রেজিস্ট্রেশন তথ্য")}
+    ${detailRow("কাজীর নাম", record.kaziname)}
+    ${detailRow("রেজি নম্বর", record.regNumber)}
+    ${detailRow("রেজি তারিখ", record.regDate)}
+    ${detailRow("বিবাহের তারিখ", record.marriageDate)}
+    ${detailRow("হিজরি তারিখ", record.marriageDate)}
+
+    ${section("অতিরিক্ত")}
+    ${detailRow("অতিরিক্ত চুক্তি", record.specialAgreement)}
+  `;
+}
+
+
+
+  function printCertificate(record) {
+  const newWindow = window.open('', '_blank');
+  newWindow.document.write(`
+    <html>
+    <head>
+      <title>Nikah Certificate</title>
+      <style>
+        body {
+          margin: 0;
+          padding: 0;
+          font-family: 'Noto Serif Bengali', serif;
+          background-color: #f9f7f3;
+        }
+        .certificate {
+          background-image: url('${window.location.origin}/certificat.jpg');
+          background-size: cover;
+          background-repeat: no-repeat;
+          width: 800px;
+          height: 1130px;
+          padding: 80px 60px;
+          box-sizing: border-box;
+          margin: auto;
+          position: relative;
+          color: #222;
+          box-shadow: 0 0 20px rgba(0,0,0,0.2);
+          border: 8px double #116b5b;
+          border-radius: 12px;
+        }
+        .arabic {
+          font-size: 22px;
+          text-align: center;
+          margin-bottom: 10px;
+          font-family: 'Scheherazade', serif;
+          color: #0e4f4f;
+        }
+        .english-trans {
+          text-align: center;
+          font-style: italic;
+          margin-bottom: 30px;
+          color: #444;
+        }
+        h1 {
+          font-size: 32px;
+          text-align: center;
+          margin: 20px 0;
+          color: #13433f;
+        }
+        h2 {
+          font-family: 'Great Vibes', cursive;
+          font-size: 28px;
+          text-align: center;
+          margin-bottom: 10px;
+          color: #841c1c;
+        }
+        .content {
+          font-size: 18px;
+          text-align: center;
+          margin-bottom: 30px;
+        }
+        .info-section {
+          display: flex;
+          justify-content: space-between;
+          padding: 0 50px;
+          margin-top: 40px;
+        }
+        .info-section div {
+          text-align: center;
+          border-top: 1px solid #000;
+          padding-top: 5px;
+          width: 40%;
+        }
+        .footer-text {
+          margin-top: 40px;
+          text-align: center;
+          font-size: 16px;
+          line-height: 1.5;
+          color: #2e2e2e;
+        }
+      </style>
+      <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Noto+Serif+Bengali&family=Scheherazade&display=swap" rel="stylesheet">
+    </head>
+    <body>
+      <div class="certificate">
+        <div class="arabic">بِسْمِ اللهِ الرَّحْمٰنِ الرَّحِيْمِ</div>
+        <div class="arabic">وَجَعَلَ بَيْنَكُم مَّوَدَّةً وَرَحْمَةً</div>
+        <div class="english-trans">"And He ordained between you love and mercy"</div>
+        <h1>This certifies that</h1>
+        <h2>${record.husbandName || 'বর'} & ${record.wifeName || 'কনে'}</h2>
+        <div class="content">
+          Were united in Marriage<br>
+          on ${record.marriageDate || 'তারিখ নেই'} CE<br>
+          corresponding to ${record.hijriDate || 'হিজরি তারিখ নেই'}
+        </div>
+        <div class="footer-text">
+          May Allah bless you, surround you with blessings,<br>
+          and bring you both together in virtue and prosperity.
+        </div>
+        <div class="info-section" style="margin-top:60px;">
+          <div>${record.wifeName || 'Bride'}<br/>Bride</div>
+          <div>${record.husbandName || 'Groom'}<br/>Groom</div>
+        </div>
+        <div class="info-section" style="margin-top:60px;">
+          <div>${record.witness1Name || 'Witness 1'}<br/>Witness</div>
+          <div>${record.witness2Name || 'Witness 2'}<br/>Witness</div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `);
+  newWindow.document.close();
+  newWindow.print();
+}
+
+</script>
+</body>
+</html>
